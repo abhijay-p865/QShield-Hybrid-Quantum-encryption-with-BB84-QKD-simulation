@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BB84 Quantum Channel — Alice / Bob</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #080d1a;
+      --bg-panel: #0c1224;
+      --bg-elevated: #111a30;
+      --border: #1a2744;
+      --text-primary: #e8edf7;
+      --text-muted: #6b7a99;
+      --text-dim: #4a5670;
+      --alice: #4da3ff;
+      --alice-glow: rgba(77, 163, 255, 0.35);
+      --bob: #2fd284;
+      --bob-glow: rgba(47, 210, 132, 0.35);
+      --threat: #ff5d6c;
+      --threat-glow: rgba(255, 93, 108, 0.35);
+      --secure: #2fd284;
+      --compromised: #ff5d6c;
+      --gauge-green: #2fd284;
+      --gauge-red: #ff5d6c;
+      --font-sans: 'DM Sans', Tahoma, sans-serif;
+      --font-mono: 'Courier New', Courier, monospace;
+      --bar-height: 44px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+    }
+
+    /* Animated background */
+    .bg-layer {
+      position: fixed; inset: 0; z-index: 0;
+      pointer-events: none; overflow: hidden;
+    }
+    .bg-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(77, 163, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(77, 163, 255, 0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      animation: gridPulse 8s ease-in-out infinite;
+    }
+    @keyframes gridPulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.85; }
+    }
+    .bg-particles { position: absolute; inset: 0; }
+    .particle {
+      position: absolute; width: 2px; height: 2px;
+      background: var(--alice); border-radius: 50%;
+      opacity: 0.15; animation: drift linear infinite;
+    }
+    @keyframes drift {
+      0%   { transform: translateY(100vh) translateX(0); opacity: 0; }
+      10%  { opacity: 0.2; }
+      90%  { opacity: 0.15; }
+      100% { transform: translateY(-20px) translateX(30px); opacity: 0; }
+    }
+
+    /* Layout */
+    .app {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column;
+      height: 100vh; min-width: 1024px;
+    }
+    .columns {
+      display: grid;
+      grid-template-columns: 1fr 1.1fr 1fr;
+      flex: 1 1 0px; min-height: 0;
+      gap: 1px; background: var(--border);
+    }
+    .column {
+      display: flex; flex-direction: column;
+      background: var(--bg-panel);
+      min-height: 0; overflow: hidden;
+    }
+    .column-inner {
+      display: flex; flex-direction: column;
+      flex: 1; min-height: 0;
+      padding: 20px 22px; gap: 14px;
+    }
+
+    /* Node headers */
+    .node-header { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .node-name {
+      font-family: var(--font-mono); font-size: 28px;
+      font-weight: 600; letter-spacing: 0.06em;
+    }
+    .column-alice .node-name { color: var(--alice); }
+    .column-bob .node-name   { color: var(--bob); }
+    .node-role {
+      font-family: var(--font-mono); font-size: 10px;
+      color: var(--text-dim); letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    /* Center title */
+    .channel-title {
+      font-family: var(--font-mono); font-size: 15px;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--text-muted); text-align: center; flex-shrink: 0;
+    }
+
+    /* Photon channel SVG */
+    .photon-wrap { flex-shrink: 0; padding: 8px 0; }
+    .photon-svg { width: 100%; height: 72px; display: block; }
+    .photon-line { stroke: var(--border); stroke-width: 1; }
+    .photon-track { fill: none; stroke: url(#photonGrad); stroke-width: 1.5; opacity: 0.5; }
+    .photon {
+      fill: var(--alice); offset-distance: 0%;
+      filter: drop-shadow(0 0 4px var(--alice));
+    }
+    .photon.paused { animation-play-state: paused !important; }
+    @keyframes photonMove {
+      0%   { offset-distance: 0%;   opacity: 0.3; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { offset-distance: 100%; opacity: 0.3; }
+    }
+    .photon.p1 { offset-path: path('M 24 36 L 376 36'); animation: photonMove 3.2s linear infinite; }
+    .photon.p2 { offset-path: path('M 24 36 L 376 36'); animation: photonMove 3.2s linear infinite 0.8s; fill: var(--bob); filter: drop-shadow(0 0 4px var(--bob)); }
+    .photon.p3 { offset-path: path('M 24 36 L 376 36'); animation: photonMove 3.2s linear infinite 1.6s; }
+    .photon.p4 { offset-path: path('M 24 36 L 376 36'); animation: photonMove 3.2s linear infinite 2.4s; fill: var(--alice); opacity: 0.7; }
+
+    .photon.eve-intercept { fill: var(--threat) !important; filter: drop-shadow(0 0 6px var(--threat)) !important; }
+
+    /* QBER gauge */
+    .gauge-section { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
+    .gauge-svg { width: 180px; height: 110px; }
+    .gauge-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.2em; color: var(--text-muted); }
+    .gauge-value { font-family: var(--font-mono); font-size: 22px; color: var(--text-primary); }
+    .gauge-value.warn { color: var(--gauge-red); }
+    .gauge-value.ok   { color: var(--gauge-green); }
+
+    /* Channel badge */
+    .channel-badge {
+      display: inline-block; font-family: var(--font-mono);
+      font-size: 12px; letter-spacing: 0.25em;
+      padding: 6px 18px; border: 1px solid; border-radius: 2px;
+      text-align: center; flex-shrink: 0;
+      transition: all 0.3s ease;
+    }
+    .channel-badge.secure {
+      color: var(--secure); border-color: var(--secure);
+      background: rgba(47, 210, 132, 0.08);
+      box-shadow: 0 0 20px var(--bob-glow);
+    }
+    .channel-badge.compromised {
+      color: var(--compromised); border-color: var(--compromised);
+      background: rgba(255, 93, 108, 0.08);
+      box-shadow: 0 0 20px var(--threat-glow);
+      animation: badgePulse 1.5s ease-in-out infinite;
+    }
+    @keyframes badgePulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .center-actions { display: flex; justify-content: center; flex-shrink: 0; margin-top: auto; padding-top: 12px; }
+
+    .btn-eve {
+      font-family: var(--font-mono); font-size: 11px;
+      letter-spacing: 0.08em; padding: 10px 20px;
+      background: transparent; color: var(--threat);
+      border: 1px solid var(--threat); cursor: pointer;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    .btn-eve:hover:not(:disabled) { background: rgba(255, 93, 108, 0.12); box-shadow: 0 0 16px var(--threat-glow); }
+    .btn-eve:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Alice form */
+    .msg-input {
+      flex: 1; min-height: 100px; resize: none;
+      background: var(--bg-base); border: 1px solid var(--border);
+      color: var(--text-primary); font-family: var(--font-mono);
+      font-size: 13px; padding: 12px; line-height: 1.5;
+    }
+    .msg-input:focus { outline: none; border-color: var(--alice); box-shadow: 0 0 0 1px var(--alice-glow); }
+    .msg-input::placeholder { color: var(--text-dim); }
+
+    .btn-transmit {
+      font-family: var(--font-mono); font-size: 12px;
+      letter-spacing: 0.1em; padding: 12px 20px;
+      background: var(--alice); color: var(--bg-base);
+      border: none; cursor: pointer; font-weight: 600;
+      transition: opacity 0.2s, filter 0.2s; flex-shrink: 0;
+    }
+    .btn-transmit:hover:not(:disabled) { filter: brightness(1.1); }
+    .btn-transmit:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .status-card {
+      font-family: var(--font-mono); font-size: 11px;
+      padding: 10px 12px; border: 1px solid; line-height: 1.7; flex-shrink: 0;
+    }
+    .status-card.clean { border-color: var(--secure); background: rgba(47, 210, 132, 0.06); color: var(--secure); }
+    .status-card.dirty { border-color: var(--compromised); background: rgba(255, 93, 108, 0.06); color: var(--compromised); }
+
+    .error-msg { font-family: var(--font-mono); font-size: 11px; color: var(--threat); line-height: 1.4; flex-shrink: 0; }
+
+    .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--text-dim); flex-shrink: 0; }
+
+    .session-log {
+      flex: 1; min-height: 0; overflow-y: auto;
+      border: 1px solid var(--border); background: var(--bg-base);
+    }
+    .session-log::-webkit-scrollbar, .inbox::-webkit-scrollbar { width: 5px; }
+    .session-log::-webkit-scrollbar-thumb, .inbox::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .log-item {
+      font-family: var(--font-mono); font-size: 11px;
+      padding: 8px 10px; border-bottom: 1px solid var(--border);
+      color: var(--text-muted); display: grid;
+      grid-template-columns: 1fr auto; gap: 4px;
+    }
+    .log-item:last-child { border-bottom: none; }
+    .log-item .sid { color: var(--alice); }
+    .log-item .ts  { color: var(--text-dim); font-size: 10px; grid-column: 1 / -1; }
+    .log-item.eve-blocked .sid { color: var(--threat); }
+
+    /* Bob inbox */
+    .inbox { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--border); background: var(--bg-base); }
+    .inbox-empty { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); padding: 20px; text-align: center; }
+    .inbox-item { padding: 12px; border-bottom: 1px solid var(--border); }
+    .inbox-item:last-child { border-bottom: none; }
+    .inbox-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .inbox-sid  { font-family: var(--font-mono); font-size: 12px; color: var(--bob); }
+    .inbox-qber { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+    .inbox-ts   { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); margin-left: auto; }
+
+    .btn-decrypt {
+      margin-top: 8px; font-family: var(--font-mono);
+      font-size: 10px; letter-spacing: 0.08em;
+      padding: 6px 14px; background: transparent;
+      color: var(--bob); border: 1px solid var(--bob); cursor: pointer;
+    }
+    .btn-decrypt:hover:not(:disabled) { background: rgba(47, 210, 132, 0.1); }
+    .btn-decrypt:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .plaintext-box {
+      margin-top: 10px; padding: 10px 12px;
+      font-family: var(--font-mono); font-size: 12px;
+      color: var(--alice); border: 1px solid var(--alice);
+      background: rgba(77, 163, 255, 0.05);
+      box-shadow: 0 0 12px var(--alice-glow);
+      word-break: break-all; line-height: 1.5;
+    }
+    .inbox-error { margin-top: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--threat); }
+
+    /* Bottom metrics bar */
+    .metrics-bar {
+      height: var(--bar-height); background: var(--bg-elevated);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      gap: 48px; flex-shrink: 0; padding: 0 24px;
+    }
+    .metric { display: flex; align-items: baseline; gap: 8px; }
+    .metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); }
+    .metric-value { font-family: var(--font-mono); font-size: 14px; color: var(--text-primary); }
+    .metric-value.unavailable { color: var(--text-dim); }
+
+    .center-body { display: flex; flex-direction: column; align-items: center; flex: 1; min-height: 0; gap: 16px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="bg-layer" aria-hidden="true">
+    <div class="bg-grid"></div>
+    <div class="bg-particles" id="particles"></div>
+  </div>
+
+  <div class="app">
+    <div class="columns">
+      <!-- ALICE -->
+      <section class="column column-alice">
+        <div class="column-inner">
+          <header class="node-header">
+            <h1 class="node-name">Alice</h1>
+            <span class="node-role">Sender</span>
+          </header>
+          <textarea class="msg-input" id="alice-message" placeholder="Enter plaintext message..."></textarea>
+          <button type="button" class="btn-transmit" id="btn-transmit">Transmit</button>
+          <div id="alice-status-card" class="status-card hidden"></div>
+          <div id="alice-error" class="error-msg hidden"></div>
+          <span class="section-label">Transmission log</span>
+          <div class="session-log" id="alice-log"></div>
+        </div>
+      </section>
+
+      <!-- QUANTUM CHANNEL -->
+      <section class="column column-center">
+        <div class="column-inner">
+          <h2 class="channel-title">BB84 Quantum Channel</h2>
+          <div class="center-body">
+            <div class="photon-wrap">
+              <svg class="photon-svg" viewBox="0 0 400 72" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="photonGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#4da3ff"/>
+                    <stop offset="100%" stop-color="#2fd284"/>
+                  </linearGradient>
+                </defs>
+                <line class="photon-line" x1="24" y1="36" x2="376" y2="36"/>
+                <line class="photon-track" x1="24" y1="36" x2="376" y2="36"/>
+                <text x="8" y="40" fill="#4da3ff" font-family="Courier New" font-size="9" opacity="0.7">A</text>
+                <text x="382" y="40" fill="#2fd284" font-family="Courier New" font-size="9" opacity="0.7">B</text>
+                <circle class="photon p1" r="4" id="photon1"/>
+                <circle class="photon p2" r="3.5" id="photon2"/>
+                <circle class="photon p3" r="3" id="photon3"/>
+                <circle class="photon p4" r="3.5" id="photon4"/>
+              </svg>
+            </div>
+
+            <div class="gauge-section">
+              <svg class="gauge-svg" viewBox="0 0 200 120" id="qber-gauge-svg">
+                <path id="gauge-bg" fill="none" stroke="#1a2744" stroke-width="10" stroke-linecap="round"/>
+                <path id="gauge-fill" fill="none" stroke="#2fd284" stroke-width="10" stroke-linecap="round"/>
+              </svg>
+              <span class="gauge-label">QBER</span>
+              <span class="gauge-value ok" id="gauge-value">0.000</span>
+            </div>
+
+            <span class="channel-badge secure" id="channel-badge">SECURE</span>
+
+            <div class="center-actions">
+              <button type="button" class="btn-eve" id="btn-eve">Simulate Eve Attack</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BOB -->
+      <section class="column column-bob">
+        <div class="column-inner">
+          <header class="node-header">
+            <h1 class="node-name">Bob</h1>
+            <span class="node-role">Receiver</span>
+          </header>
+          <span class="section-label">Inbox</span>
+          <div class="inbox" id="bob-inbox">
+            <div class="inbox-empty" id="inbox-empty">No sessions received</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="metrics-bar">
+      <div class="metric">
+        <span class="metric-label">Total Sessions</span>
+        <span class="metric-value" id="m-sessions">&mdash;</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Average QBER</span>
+        <span class="metric-value" id="m-qber">&mdash;</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">KGR</span>
+        <span class="metric-value" id="m-kgr">&mdash;</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Threats Detected</span>
+        <span class="metric-value" id="m-threats">&mdash;</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+(function () {
+  'use strict';
+
+  const QBER_MAX = 0.4;
+  const QBER_THRESHOLD = 0.11;
+
+  let currentQber = 0;
+  let sentSessions = [];
+  let inboxItems = [];
+
+  const $ = (id) => document.getElementById(id);
+
+  function truncateId(id) {
+    if (!id || typeof id !== 'string') return '\u2014';
+    return id.length > 8 ? id.slice(0, 8) + '\u2026' : id;
+  }
+
+  function formatTime(d) {
+    return d.toLocaleTimeString('en-GB', { hour12: false });
+  }
+
+  function formatQber(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n.toFixed(3) : '\u2014';
+  }
+
+  function parseApiError(data, fallback) {
+    if (!data) return fallback;
+    if (typeof data.error === 'string') return data.error;
+    if (typeof data.detail === 'string') return data.detail;
+    return data.message || fallback;
+  }
+
+  /* ── Background particles ─────────────────────────────── */
+  (function initParticles() {
+    const container = $('particles');
+    for (let i = 0; i < 24; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = Math.random() * 100 + '%';
+      p.style.animationDuration = (12 + Math.random() * 18) + 's';
+      p.style.animationDelay = (Math.random() * 20) + 's';
+      p.style.opacity = 0.08 + Math.random() * 0.12;
+      container.appendChild(p);
+    }
+  })();
+
+  /* ── QBER gauge (SVG arc) ─────────────────────────────── */
+  const gaugeBg = $('gauge-bg');
+  const gaugeFill = $('gauge-fill');
+  const gaugeValueEl = $('gauge-value');
+
+  function describeArc(cx, cy, r, startAngle, endAngle) {
+    const start = polar(cx, cy, r, endAngle);
+    const end   = polar(cx, cy, r, startAngle);
+    const large = endAngle - startAngle <= 180 ? 0 : 1;
+    return 'M ' + start.x + ' ' + start.y + ' A ' + r + ' ' + r + ' 0 ' + large + ' 0 ' + end.x + ' ' + end.y;
+  }
+
+  function polar(cx, cy, r, angleDeg) {
+    const rad = (angleDeg - 90) * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+
+  function initGauge() {
+    const path = describeArc(100, 95, 70, 180, 360);
+    gaugeBg.setAttribute('d', path);
+    gaugeFill.setAttribute('d', path);
+    updateGauge(0);
+  }
+
+  function updateGauge(qber) {
+    currentQber = Math.max(0, Math.min(QBER_MAX, Number(qber) || 0));
+    const ratio = currentQber / QBER_MAX;
+    const sweep = 180 * ratio;
+    const path = describeArc(100, 95, 70, 180, 180 + sweep);
+    gaugeFill.setAttribute('d', path);
+    const isWarn = currentQber > QBER_THRESHOLD;
+    gaugeFill.setAttribute('stroke', isWarn ? 'var(--gauge-red)' : 'var(--gauge-green)');
+    gaugeValueEl.textContent = formatQber(currentQber);
+    gaugeValueEl.classList.toggle('warn', isWarn);
+    gaugeValueEl.classList.toggle('ok', !isWarn);
+  }
+
+  function setChannelBadge(secure) {
+    const badge = $('channel-badge');
+    badge.textContent = secure ? 'SECURE' : 'COMPROMISED';
+    badge.className = 'channel-badge ' + (secure ? 'secure' : 'compromised');
+  }
+
+  /* ── Photon animation helpers ─────────────────────────── */
+  function setPhotonsEve(on) {
+    ['photon1', 'photon2', 'photon3', 'photon4'].forEach(function (id) {
+      $(id).classList.toggle('eve-intercept', on);
+    });
+  }
+
+  function flashEvePhotons(ms) {
+    setPhotonsEve(true);
+    setTimeout(function () { setPhotonsEve(false); }, ms || 2000);
+  }
+
+  /* ── Alice panel ──────────────────────────────────────── */
+  function renderAliceLog() {
+    const log = $('alice-log');
+    log.innerHTML = '';
+    sentSessions.slice(0, 8).forEach(function (s) {
+      const div = document.createElement('div');
+      div.className = 'log-item' + (s.blocked ? ' eve-blocked' : '');
+      div.innerHTML =
+        '<span class="sid">' + truncateId(s.uuid) + (s.blocked ? ' [EVE]' : '') + '</span>' +
+        '<span>QBER ' + formatQber(s.qber) + '</span>' +
+        '<span class="ts">' + s.timestamp + '</span>';
+      log.appendChild(div);
+    });
+  }
+
+  function showAliceStatus(text, clean) {
+    const card = $('alice-status-card');
+    card.className = 'status-card ' + (clean ? 'clean' : 'dirty');
+    card.textContent = text;
+    card.classList.remove('hidden');
+    $('alice-error').classList.add('hidden');
+  }
+
+  function showAliceError(msg) {
+    $('alice-error').textContent = msg;
+    $('alice-error').classList.remove('hidden');
+    $('alice-status-card').classList.add('hidden');
+  }
+
+  async function callEncrypt(body) {
+    const res = await fetch('/encrypt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(function () { return {}; });
+    return { status: res.status, ok: res.ok, data: data };
+  }
+
+  /* ── Transmit button ──────────────────────────────────── */
+  $('btn-transmit').addEventListener('click', async function () {
+    const btn = $('btn-transmit');
+    const message = $('alice-message').value.trim();
+    if (!message) { showAliceError('Message cannot be empty'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Transmitting\u2026';
+    $('alice-error').classList.add('hidden');
+
+    try {
+      const res = await callEncrypt({ message: message });
+
+      if (res.status === 422) {
+        /* Eve was detected — channel compromised, no message stored */
+        const qber = res.data.qber;
+        if (qber != null) updateGauge(qber);
+        setChannelBadge(false);
+        flashEvePhotons(2500);
+        showAliceStatus('Eavesdropping detected — session aborted (QBER ' + formatQber(qber) + ')', false);
+
+        sentSessions.unshift({ uuid: null, qber: qber, timestamp: formatTime(new Date()), blocked: true });
+        sentSessions = sentSessions.slice(0, 8);
+        renderAliceLog();
+        fetchMetrics();
+        return;
+      }
+
+      if (!res.ok) {
+        showAliceError(parseApiError(res.data, 'HTTP ' + res.status));
+        return;
+      }
+
+      /* Success — clean channel */
+      const d = res.data;
+      updateGauge(d.qber);
+      setChannelBadge(true);
+      showAliceStatus('session: ' + truncateId(d.uuid) + '  QBER: ' + formatQber(d.qber) + '  channel: SECURE', true);
+
+      sentSessions.unshift({ uuid: d.uuid, qber: d.qber, timestamp: formatTime(new Date()), blocked: false });
+      sentSessions = sentSessions.slice(0, 8);
+      renderAliceLog();
+
+      addToInbox({ uuid: d.uuid, qber: d.qber, timestamp: formatTime(new Date()) });
+      fetchMetrics();
+    } catch (err) {
+      showAliceError(err.message || String(err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Transmit';
+    }
+  });
+
+  /* ── Simulate Eve Attack button ───────────────────────── */
+  $('btn-eve').addEventListener('click', async function () {
+    const btn = $('btn-eve');
+    btn.disabled = true;
+    btn.textContent = 'Attacking\u2026';
+    flashEvePhotons(3000);
+
+    try {
+      const res = await callEncrypt({ message: '[EVE SIMULATION]', eve_present: true });
+
+      if (res.status === 422) {
+        /* Expected: Eve detected, transmission failed */
+        const qber = res.data.qber;
+        if (qber != null) updateGauge(qber);
+        setChannelBadge(false);
+        showAliceStatus('Eve simulation: eavesdropping detected — session aborted (QBER ' + formatQber(qber) + ')', false);
+
+        sentSessions.unshift({ uuid: null, qber: qber, timestamp: formatTime(new Date()), blocked: true });
+        sentSessions = sentSessions.slice(0, 8);
+        renderAliceLog();
+      } else if (res.ok) {
+        /* Unlikely but possible: Eve present but QBER stayed below threshold */
+        const d = res.data;
+        updateGauge(d.qber);
+        setChannelBadge(true);
+        showAliceStatus('Eve simulation: Eve present but QBER ' + formatQber(d.qber) + ' stayed below threshold — not detected', true);
+      } else {
+        showAliceError(parseApiError(res.data, 'Simulation failed'));
+      }
+
+      fetchMetrics();
+    } catch (err) {
+      showAliceError(err.message || String(err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Simulate Eve Attack';
+    }
+  });
+
+  /* ── Bob inbox ────────────────────────────────────────── */
+  function renderInbox() {
+    const inbox = $('bob-inbox');
+    const empty = $('inbox-empty');
+
+    if (inboxItems.length === 0) {
+      empty.classList.remove('hidden');
+      inbox.querySelectorAll('.inbox-item').forEach(function (el) { el.remove(); });
+      return;
+    }
+
+    empty.classList.add('hidden');
+    inbox.querySelectorAll('.inbox-item').forEach(function (el) { el.remove(); });
+
+    inboxItems.forEach(function (item, idx) {
+      const div = document.createElement('div');
+      div.className = 'inbox-item';
+      div.dataset.idx = String(idx);
+
+      div.innerHTML =
+        '<div class="inbox-meta">' +
+          '<span class="inbox-sid">' + truncateId(item.uuid) + '</span>' +
+          '<span class="inbox-qber">QBER ' + formatQber(item.qber) + '</span>' +
+          '<span class="inbox-ts">' + item.timestamp + '</span>' +
+        '</div>' +
+        '<button type="button" class="btn-decrypt" data-idx="' + idx + '">Decrypt</button>';
+
+      if (item.plaintext != null) {
+        const box = document.createElement('div');
+        box.className = 'plaintext-box';
+        box.textContent = item.plaintext;
+        div.appendChild(box);
+      }
+      if (item.error) {
+        const err = document.createElement('div');
+        err.className = 'inbox-error';
+        err.textContent = item.error;
+        div.appendChild(err);
+      }
+      inbox.appendChild(div);
+    });
+
+    inbox.querySelectorAll('.btn-decrypt').forEach(function (btn) {
+      btn.addEventListener('click', function () { decryptSession(Number(btn.dataset.idx)); });
+    });
+  }
+
+  function addToInbox(entry) {
+    var exists = inboxItems.some(function (i) { return i.uuid === entry.uuid; });
+    if (!exists) {
+      inboxItems.unshift({
+        uuid: entry.uuid,
+        qber: entry.qber,
+        timestamp: entry.timestamp,
+        plaintext: null,
+        error: null,
+      });
+    }
+    renderInbox();
+  }
+
+  async function decryptSession(idx) {
+    var item = inboxItems[idx];
+    if (!item) return;
+
+    var inbox = $('bob-inbox');
+    var row = inbox.querySelector('[data-idx="' + idx + '"]');
+    var btn = row && row.querySelector('.btn-decrypt');
+    if (btn) { btn.disabled = true; btn.textContent = 'Decrypting\u2026'; }
+    item.error = null;
+
+    try {
+      var res = await fetch('/decrypt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uuid: item.uuid }),
+      });
+      var data = await res.json().catch(function () { return {}; });
+
+      if (!res.ok) {
+        throw new Error(parseApiError(data, 'HTTP ' + res.status));
+      }
+      item.plaintext = data.message || JSON.stringify(data);
+    } catch (e) {
+      item.error = e.message || 'Decrypt failed';
+    }
+
+    renderInbox();
+  }
+
+  /* ── Metrics bar ──────────────────────────────────────── */
+  async function fetchMetrics() {
+    try {
+      var res = await fetch('/metrics', { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+
+      $('m-sessions').textContent = data.total_messages != null ? data.total_messages : '\u2014';
+      $('m-sessions').classList.remove('unavailable');
+
+      $('m-qber').textContent = data.average_qber != null ? formatQber(data.average_qber) : '\u2014';
+      $('m-qber').classList.remove('unavailable');
+
+      $('m-kgr').textContent = data.kgr != null ? String(data.kgr) : '\u2014';
+      $('m-kgr').classList.remove('unavailable');
+
+      $('m-threats').textContent = data.threats_detected != null ? String(data.threats_detected) : '\u2014';
+      $('m-threats').classList.remove('unavailable');
+    } catch (e) {
+      ['m-sessions', 'm-qber', 'm-kgr', 'm-threats'].forEach(function (id) {
+        $(id).textContent = '\u2014';
+        $(id).classList.add('unavailable');
+      });
+    }
+  }
+
+  /* ── Init ─────────────────────────────────────────────── */
+  initGauge();
+  setChannelBadge(true);
+  renderAliceLog();
+  renderInbox();
+  fetchMetrics();
+  setInterval(fetchMetrics, 15000);
+})();
+  </script>
+</body>
+</html>

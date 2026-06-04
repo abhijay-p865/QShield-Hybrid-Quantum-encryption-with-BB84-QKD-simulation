@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quantum-Safe Security Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141c33;
+      --panel-2: #1a2441;
+      --text: #e6edf7;
+      --muted: #9eb0cc;
+      --accent: #4da3ff;
+      --danger: #ff5d6c;
+      --success: #2fd284;
+      --border: #2b365a;
+      --shadow: rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(180deg, #080d1a 0%, #0b1020 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.8rem;
+      color: #f3f7ff;
+      letter-spacing: 0.3px;
+    }
+
+    .last-updated {
+      color: var(--muted);
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 10px 24px var(--shadow);
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-size: 1.7rem;
+      font-weight: 700;
+    }
+
+    .section-title {
+      margin: 0 0 12px;
+      font-size: 1.1rem;
+      color: #f0f5ff;
+    }
+
+    .layout-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.84rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status {
+      font-weight: 700;
+    }
+
+    .clean {
+      color: var(--success);
+    }
+
+    .compromised {
+      color: var(--danger);
+    }
+
+    .sim-btn {
+      background: linear-gradient(180deg, #2d79ff 0%, #2461cc 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+
+    .sim-btn:hover {
+      filter: brightness(1.08);
+    }
+
+    .sim-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .sim-result {
+      color: var(--muted);
+      margin-bottom: 10px;
+      min-height: 20px;
+    }
+
+    .alert {
+      display: none;
+      border: 1px solid #7f2e38;
+      background: #35161c;
+      color: #ffb7bf;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+    }
+
+    .alert.show {
+      display: block;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 320px !important;
+    }
+
+    @media (max-width: 900px) {
+      .layout-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Quantum-Safe Security Dashboard</h1>
+      <div class="last-updated">Last updated: <span id="lastUpdated">--</span></div>
+    </header>
+
+    <section class="metric-grid">
+      <div class="card">
+        <div class="metric-label">Total Encrypted Messages</div>
+        <div class="metric-value" id="totalMessages">--</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Average QBER</div>
+        <div class="metric-value" id="averageQber">--</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Threats Detected (24h)</div>
+        <div class="metric-value" id="threatsDetected">--</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Key Strength</div>
+        <div class="metric-value">A+</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Key Generation Rate (bits/session)</div>
+        <div class="metric-value" id="kgrValue">--</div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-bottom: 14px;">
+      <h2 class="section-title">QBER Trend (Last 10 Sessions)</h2>
+      <canvas id="qberChart"></canvas>
+    </section>
+
+    <section class="layout-grid">
+      <div class="card">
+        <h2 class="section-title">Session Log</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Session #</th>
+                <th>QBER</th>
+                <th>Channel Status</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="sessionLogBody">
+              <tr>
+                <td colspan="4" style="color: var(--muted);">Loading session data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Eve Simulation</h2>
+        <button id="simulateBtn" class="sim-btn" type="button">Simulate Eavesdropping Attack</button>
+        <div id="simResult" class="sim-result"></div>
+        <div id="simAlert" class="alert"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const THRESHOLD = 0.11;
+    let qberChart;
+
+    function formatTimestamp(input) {
+      if (!input) return "--";
+      const dt = new Date(input);
+      if (isNaN(dt.getTime())) return input;
+      return dt.toLocaleString();
+    }
+
+    function updateLastUpdated() {
+      document.getElementById("lastUpdated").textContent = new Date().toLocaleString();
+    }
+
+    function buildChart(labels, qberValues) {
+      const ctx = document.getElementById("qberChart");
+
+      qberChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: "QBER",
+              data: qberValues,
+              borderColor: "#4da3ff",
+              backgroundColor: "rgba(77, 163, 255, 0.2)",
+              tension: 0.25,
+              borderWidth: 2,
+              pointRadius: 3,
+              pointHoverRadius: 4,
+              fill: true
+            },
+            {
+              label: "Eavesdrop threshold",
+              data: new Array(labels.length).fill(THRESHOLD),
+              borderColor: "#ff5d6c",
+              borderDash: [8, 6],
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: {
+                color: "#dbe7ff"
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ": " + Number(context.raw).toFixed(3);
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: {
+                color: "#a8bbdb"
+              },
+              grid: {
+                color: "rgba(255, 255, 255, 0.06)"
+              }
+            },
+            y: {
+              min: 0,
+              max: 0.4,
+              ticks: {
+                color: "#a8bbdb",
+                stepSize: 0.05
+              },
+              grid: {
+                color: "rgba(255, 255, 255, 0.08)"
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function updateChart(labels, qberValues) {
+      if (!qberChart) {
+        buildChart(labels, qberValues);
+        return;
+      }
+      qberChart.data.labels = labels;
+      qberChart.data.datasets[0].data = qberValues;
+      qberChart.data.datasets[1].data = new Array(labels.length).fill(THRESHOLD);
+      qberChart.update();
+    }
+
+    function renderSessionLog(sessions) {
+      const body = document.getElementById("sessionLogBody");
+      body.innerHTML = "";
+
+      if (!sessions.length) {
+        body.innerHTML = "<tr><td colspan='4' style='color: var(--muted);'>No recent sessions available.</td></tr>";
+        return;
+      }
+
+      sessions.forEach((session, index) => {
+        const qber = Number(session.qber) || 0;
+        const compromised = qber > THRESHOLD;
+        const statusClass = compromised ? "compromised" : "clean";
+        const statusText = compromised ? "Compromised" : "Clean";
+
+        const row = document.createElement("tr");
+        row.innerHTML =
+          "<td>" + (index + 1) + "</td>" +
+          "<td>" + qber.toFixed(3) + "</td>" +
+          "<td class='status " + statusClass + "'>" + statusText + "</td>" +
+          "<td>" + formatTimestamp(session.created_at) + "</td>";
+        body.appendChild(row);
+      });
+    }
+
+    async function loadMetrics() {
+      try {
+        const response = await fetch("/metrics");
+        if (!response.ok) throw new Error("Failed to fetch metrics");
+        const data = await response.json();
+
+        const sessions = Array.isArray(data.recent_qbers) ? data.recent_qbers.slice(0, 10) : [];
+        const labels = sessions.map((entry, idx) => "S" + (idx + 1));
+        const qberValues = sessions.map((entry) => Number(entry.qber) || 0);
+
+        document.getElementById("totalMessages").textContent = data.total_messages ?? "--";
+        document.getElementById("averageQber").textContent = data.average_qber != null ? Number(data.average_qber).toFixed(3) : "--";
+        document.getElementById("threatsDetected").textContent = data.threats_detected ?? "--";
+        document.getElementById("kgrValue").textContent = data.kgr != null ? data.kgr : "--";
+
+        updateChart(labels, qberValues);
+        renderSessionLog(sessions);
+        updateLastUpdated();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    async function simulateEve() {
+      const button = document.getElementById("simulateBtn");
+      const resultEl = document.getElementById("simResult");
+      const alertEl = document.getElementById("simAlert");
+
+      button.disabled = true;
+      resultEl.textContent = "Running simulation...";
+      alertEl.classList.remove("show");
+      alertEl.textContent = "";
+
+      try {
+        const response = await fetch("/simulate-eve", {
+          method: "POST"
+        });
+        if (!response.ok) throw new Error("Simulation request failed");
+        const data = await response.json();
+        const qber = Number(data.qber) || 0;
+        resultEl.textContent = "Simulated QBER: " + qber.toFixed(3);
+        
+        if (qberChart) {
+          const spikeQber = Number(data.qber) || 0;
+          qberChart.data.labels.push("Eve");
+          qberChart.data.datasets[0].data.push(spikeQber);
+          qberChart.data.datasets[1].data.push(THRESHOLD);
+          if (qberChart.data.labels.length > 11) {
+              qberChart.data.labels.shift();
+              qberChart.data.datasets[0].data.shift();
+              qberChart.data.datasets[1].data.shift();
+          }
+          qberChart.update();
+      }
+
+        if (data.channel_clean === false) {
+          alertEl.textContent = data.message || "Potential eavesdropping detected.";
+          alertEl.classList.add("show");
+        }
+
+        setTimeout(loadMetrics, 1000);
+      } catch (error) {
+        resultEl.textContent = "Simulation failed. Please try again.";
+        alertEl.textContent = error.message;
+        alertEl.classList.add("show");
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    document.getElementById("simulateBtn").addEventListener("click", simulateEve);
+
+    loadMetrics();
+    setInterval(loadMetrics, 10000);
+    updateLastUpdated();
+    setInterval(updateLastUpdated, 1000);
+  </script>
+</body>
+</html>

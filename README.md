@@ -55,16 +55,6 @@ templates/
   channel.html        Alice/Bob communication interface
   dashboard.html      Security monitoring dashboard
 ```
-
-**Shelved (three-service architecture, correct but not used in MVP):**
-```
-alice_service.py      Alice's standalone Flask service (port 5001)
-bob_service.py        Bob's standalone Flask service (port 5002)
-alice_db.py           Alice's database interface
-bob_db.py             Bob's database interface
-setup_databases.sql   Database creation script for alice_db and bob_db
-```
-
 ---
 
 ## Setup
